@@ -7,6 +7,7 @@ use cortex_m::peripheral::SYST;
 use hal::timer::{CountDown, Periodic};
 use void::Void;
 
+pub mod irtim;
 pub mod opm;
 pub mod pins;
 pub mod pwm;

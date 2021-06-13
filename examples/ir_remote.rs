@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![deny(warnings)]
+// #![deny(warnings)]
 
 extern crate cortex_m;
 extern crate cortex_m_rt as rt;
@@ -9,13 +9,15 @@ extern crate rtic;
 extern crate stm32g0xx_hal as hal;
 
 use hal::exti::Event;
+use hal::gpio::gpiob::PB9;
+use hal::gpio::Analog;
 use hal::gpio::SignalEdge;
 use hal::prelude::*;
 use hal::rcc;
 use hal::stm32;
 use hal::time::*;
-use hal::timer::pwm::PwmPin;
-use hal::timer::{self, Timer};
+use hal::timer::irtim::IrTransmitter;
+use hal::timer::Timer;
 use infrared::protocols::nec::NecCommand;
 use infrared::{protocols::Nec, Sender};
 use rtic::app;
@@ -27,14 +29,11 @@ const STROBE_COMMAND: NecCommand = NecCommand {
     repeat: false,
 };
 
-type IrPin = PwmPin<stm32::TIM17, timer::Channel1>;
-type IrTimer = Timer<stm32::TIM16>;
-
 #[app(device = hal::stm32, peripherals = true)]
 const APP: () = {
     struct Resources {
-        timer: IrTimer,
-        transmitter: Sender<Nec, IrPin>,
+        timer: Timer<stm32::TIM15>,
+        transmitter: Sender<Nec, IrTransmitter<stm32::TIM16, PB9<Analog>>>,
         exti: stm32::EXTI,
     }
 
@@ -47,14 +46,15 @@ const APP: () = {
 
         gpioc.pc13.listen(SignalEdge::Falling, &mut ctx.device.EXTI);
 
-        let mut timer = ctx.device.TIM16.timer(&mut rcc);
+        let mut timer = ctx.device.TIM15.timer(&mut rcc);
         timer.start(IR_SAMPLERATE);
         timer.listen();
 
-        let carrier_timer = ctx.device.TIM17.pwm(38.khz(), &mut rcc);
-        let mut ir_pin = carrier_timer.bind_pin(gpiob.pb9);
-        ir_pin.set_duty(ir_pin.get_max_duty() / 2);
-        let transmitter = Sender::new(IR_SAMPLERATE.0, ir_pin);
+        let ir_phy =
+            ctx.device
+                .TIM17
+                .ir_transmitter(38.khz(), ctx.device.TIM16, gpiob.pb9, &mut rcc);
+        let transmitter = Sender::new(IR_SAMPLERATE.0, ir_phy);
 
         init::LateResources {
             timer,
@@ -63,7 +63,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM16, resources = [timer, transmitter])]
+    #[task(binds = TIM15, resources = [timer, transmitter])]
     fn timer_tick(ctx: timer_tick::Context) {
         ctx.resources.transmitter.tick();
         ctx.resources.timer.clear_irq();

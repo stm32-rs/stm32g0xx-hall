@@ -39,6 +39,7 @@ pub use crate::time::U32Ext as _;
 pub use crate::timer::opm::OpmExt as _;
 pub use crate::timer::pwm::PwmExt as _;
 pub use crate::timer::qei::QeiExt as _;
+pub use crate::timer::irtim::IrTransmitterExt as _;
 pub use crate::timer::stopwatch::StopwatchExt as _;
 pub use crate::timer::TimerExt as _;
 pub use crate::watchdog::IWDGExt as _;
